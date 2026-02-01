@@ -67,10 +67,12 @@ services:
       - minio
     entrypoint: >
       /bin/sh -c "
+      set -e;
       sleep 10;
-      /usr/bin/mc config host add myminio http://minio:9000 ${STORAGE_ACCESS_KEY:-minioadmin} ${STORAGE_SECRET_KEY:-minioadmin};
-      /usr/bin/mc mb myminio/${STORAGE_BUCKET:-videograph} || true;
-      /usr/bin/mc policy set download myminio/${STORAGE_BUCKET:-videograph}/public || true;
+      /usr/bin/mc alias set myminio http://minio:9000 ${STORAGE_ACCESS_KEY:-minioadmin} ${STORAGE_SECRET_KEY:-minioadmin};
+      /usr/bin/mc mb --ignore-existing myminio/${STORAGE_BUCKET:-videograph};
+      # Make bucket publicly downloadable (adjust if you want stricter access)
+      /usr/bin/mc anonymous set download myminio/${STORAGE_BUCKET:-videograph} || true;
       exit 0;
       "
     networks:
