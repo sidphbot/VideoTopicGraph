@@ -1,0 +1,49 @@
+{
+  "name": "video-topic-graph-platform",
+  "version": "1.0.0",
+  "description": "Open-source platform for video topic graph generation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "build:packages": "turbo run build --filter=./packages/*",
+    "test": "vitest run",
+    "test:unit": "vitest run packages/",
+    "test:integration": "vitest run tests/integration/",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:coverage": "vitest run --coverage",
+    "lint": "turbo run lint",
+    "lint:fix": "turbo run lint:fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
+    "typecheck": "turbo run typecheck",
+    "db:migrate": "cd services/api && pnpm db:migrate",
+    "db:generate": "cd services/api && pnpm db:generate",
+    "docker:up": "cd infra && docker-compose up -d",
+    "docker:up:test": "cd infra && docker-compose -f docker-compose.yml -f docker-compose.test.yml up -d",
+    "docker:down": "cd infra && docker-compose down",
+    "docker:logs": "cd infra && docker-compose logs -f",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "perf:test": "k6 run tests/performance/api-load.js"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.0.0",
+    "@vitest/coverage-v8": "^1.0.0",
+    "playwright": "^1.40.0",
+    "prettier": "^3.0.0",
+    "eslint": "^8.0.0"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

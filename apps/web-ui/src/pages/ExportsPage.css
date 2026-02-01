@@ -1,0 +1,62 @@
+.exports-page {
+  padding: 2rem 0;
+}
+
+.exports-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.export-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--surface-color);
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.export-icon {
+  font-size: 2rem;
+}
+
+.export-info {
+  flex: 1;
+}
+
+.export-info h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.export-meta {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.export-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-right: 1rem;
+}
+
+.status-icon {
+  font-size: 1.25rem;
+}
+
+.status-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 4rem;
+  color: var(--text-secondary);
+  background: var(--surface-color);
+  border-radius: var(--radius-lg);
+}

@@ -1,0 +1,1665 @@
+openapi: 3.1.0
+info:
+  title: Video Topic Graph Platform API
+  description: |
+    Open-source platform for video topic graph generation.
+    All endpoints require OIDC authentication via Bearer token.
+  version: 1.0.0
+  contact:
+    name: Video Topic Graph Platform
+    url: https://github.com/video-topic-graph/platform
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Videos
+    description: Video ingestion and management
+  - name: Graphs
+    description: Topic graph operations
+  - name: Topics
+    description: Topic node operations
+  - name: Search
+    description: Semantic and deep search
+  - name: Exports
+    description: Export generation
+  - name: Quotas
+    description: User quotas and limits
+  - name: Shares
+    description: Sharing and access control
+
+paths:
+  /videos/analyze:
+    post:
+      summary: Submit a video for analysis
+      description: |
+        Submits a video URL for processing through the complete pipeline:
+        download → ASR → topic segmentation → graph generation → snippet creation
+      tags: [Videos]
+      operationId: analyzeVideo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VideoAnalyzeRequest'
+      responses:
+        '202':
+          description: Video accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /videos:
+    get:
+      summary: List user's videos
+      tags: [Videos]
+      operationId: listVideos
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/VideoStatus'
+      responses:
+        '200':
+          description: List of videos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoListResponse'
+
+  /videos/{id}:
+    get:
+      summary: Get video details
+      tags: [Videos]
+      operationId: getVideo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Video details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete a video and all associated data
+      tags: [Videos]
+      operationId: deleteVideo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Video deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /videos/{id}/graph:
+    get:
+      summary: Get topic graph for a video
+      tags: [Graphs]
+      operationId: getVideoGraph
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: version
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Specific graph version (latest if omitted)
+        - name: level
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+          description: Filter by topic hierarchy level
+      responses:
+        '200':
+          description: Topic graph
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /videos/{id}/status:
+    get:
+      summary: Get video processing status
+      tags: [Videos]
+      operationId: getVideoStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Processing status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VideoStatusResponse'
+
+  /videos/{id}/transcript:
+    get:
+      summary: Get video transcript segments
+      tags: [Videos]
+      operationId: getVideoTranscript
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: start_ts
+          in: query
+          schema:
+            type: number
+          description: Filter segments starting after this timestamp
+        - name: end_ts
+          in: query
+          schema:
+            type: number
+          description: Filter segments ending before this timestamp
+      responses:
+        '200':
+          description: Transcript segments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranscriptResponse'
+
+  /graphs/{id}:
+    get:
+      summary: Get graph by ID
+      tags: [Graphs]
+      operationId: getGraph
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Graph details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete a graph version
+      tags: [Graphs]
+      operationId: deleteGraph
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Graph deleted
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /graphs/{id}/fork:
+    post:
+      summary: Fork a graph to create a new version
+      description: Creates a new graph version based on an existing one
+      tags: [Graphs]
+      operationId: forkGraph
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForkGraphRequest'
+      responses:
+        '201':
+          description: New graph version created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /graphs/{id}/versions:
+    get:
+      summary: List all versions of a graph
+      tags: [Graphs]
+      operationId: listGraphVersions
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of graph versions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphVersionListResponse'
+
+  /topics/{id}:
+    get:
+      summary: Get topic details
+      tags: [Topics]
+      operationId: getTopic
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Topic details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TopicResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Update topic
+      description: Update topic title, summary, or keywords
+      tags: [Topics]
+      operationId: updateTopic
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTopicRequest'
+      responses:
+        '200':
+          description: Topic updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TopicResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /topics/{id}/snippets:
+    get:
+      summary: Get snippets for a topic
+      tags: [Topics]
+      operationId: getTopicSnippets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of snippets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SnippetListResponse'
+
+  /topics/merge:
+    post:
+      summary: Merge multiple topics
+      description: |
+        Merges two or more topics into a single topic.
+        Creates a new topic and marks source topics as merged.
+      tags: [Topics]
+      operationId: mergeTopics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeTopicsRequest'
+      responses:
+        '200':
+          description: Topics merged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TopicResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /topics/{id}/split:
+    post:
+      summary: Split a topic at a timestamp
+      tags: [Topics]
+      operationId: splitTopic
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SplitTopicRequest'
+      responses:
+        '200':
+          description: Topic split into two
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TopicResponse'
+
+  /search:
+    post:
+      summary: Semantic search across topics
+      description: Search topics by semantic similarity to query
+      tags: [Search]
+      operationId: searchTopics
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+
+  /search/deep:
+    post:
+      summary: Deep search with LLM reasoning
+      description: |
+        Performs deep search using LLM to reason across topics.
+        May include topic synthesis and cross-reference analysis.
+      tags: [Search]
+      operationId: deepSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeepSearchRequest'
+      responses:
+        '200':
+          description: Deep search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeepSearchResponse'
+
+  /exports:
+    post:
+      summary: Create an export
+      description: Generate PPTX, HTML, or PDF export
+      tags: [Exports]
+      operationId: createExport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExportRequest'
+      responses:
+        '202':
+          description: Export job created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /exports/{id}:
+    get:
+      summary: Get export status and download URL
+      tags: [Exports]
+      operationId: getExport
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Export details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExportResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /exports/{id}/download:
+    get:
+      summary: Download export file
+      tags: [Exports]
+      operationId: downloadExport
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Export file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /quota:
+    get:
+      summary: Get user's quota usage
+      tags: [Quotas]
+      operationId: getQuota
+      responses:
+        '200':
+          description: Quota information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuotaResponse'
+
+  /shares:
+    post:
+      summary: Create a share link
+      tags: [Shares]
+      operationId: createShare
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateShareRequest'
+      responses:
+        '201':
+          description: Share created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShareResponse'
+
+  /shares/{token}:
+    get:
+      summary: Get shared resource
+      description: Public endpoint for accessing shared resources
+      tags: [Shares]
+      operationId: getSharedResource
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Shared resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedResourceResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          description: Share link expired
+
+    delete:
+      summary: Revoke a share link
+      tags: [Shares]
+      operationId: revokeShare
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Share revoked
+
+  /jobs/{id}:
+    get:
+      summary: Get job status
+      description: Check the status of a pipeline job
+      tags: [Jobs]
+      operationId: getJobStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /jobs/{id}/cancel:
+    post:
+      summary: Cancel a running job
+      tags: [Jobs]
+      operationId: cancelJob
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job cancelled
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Job cannot be cancelled
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OIDC Bearer token from Keycloak
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    # Request Schemas
+    VideoAnalyzeRequest:
+      type: object
+      required: [source_url]
+      properties:
+        source_url:
+          type: string
+          format: uri
+          description: URL of the video to analyze
+        source_type:
+          type: string
+          enum: [youtube, vimeo, direct, file]
+          default: direct
+        config:
+          $ref: '#/components/schemas/PipelineConfig'
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Optional user metadata
+
+    PipelineConfig:
+      type: object
+      description: Override default pipeline configuration
+      properties:
+        asr_model:
+          type: string
+          enum: [whisper, faster-whisper, whisper-cpp]
+        asr_language:
+          type: string
+          description: ISO 639-1 language code (auto-detect if omitted)
+        enable_diarization:
+          type: boolean
+          default: false
+        enable_scene_detection:
+          type: boolean
+          default: false
+        topic_levels:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 3
+        embedding_model:
+          type: string
+          enum: [all-MiniLM-L6-v2, all-mpnet-base-v2, ollama-nomic]
+        llm_model:
+          type: string
+          enum: [llama2, mistral, mixtral, ollama-phi]
+        snippet_quality:
+          type: string
+          enum: [low, medium, high]
+          default: medium
+
+    ForkGraphRequest:
+      type: object
+      properties:
+        notes:
+          type: string
+          description: Notes about this version
+        topic_modifications:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopicModification'
+
+    TopicModification:
+      type: object
+      required: [topic_id, action]
+      properties:
+        topic_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+          enum: [update, delete, merge_source, merge_target]
+        updates:
+          $ref: '#/components/schemas/UpdateTopicRequest'
+
+    UpdateTopicRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+        summary:
+          type: string
+          maxLength: 5000
+        keywords:
+          type: array
+          items:
+            type: string
+          maxItems: 20
+        importance_score:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    MergeTopicsRequest:
+      type: object
+      required: [topic_ids]
+      properties:
+        topic_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 2
+          maxItems: 10
+        new_title:
+          type: string
+          description: Optional custom title for merged topic
+
+    SplitTopicRequest:
+      type: object
+      required: [split_at_ts]
+      properties:
+        split_at_ts:
+          type: number
+          description: Timestamp to split at (seconds)
+        new_titles:
+          type: array
+          items:
+            type: string
+          minItems: 2
+          maxItems: 2
+
+    SearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 1000
+        video_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Limit search to specific videos
+        filters:
+          type: object
+          properties:
+            level:
+              type: integer
+            min_importance:
+              type: number
+              minimum: 0
+              maximum: 1
+            date_from:
+              type: string
+              format: date-time
+            date_to:
+              type: string
+              format: date-time
+        options:
+          type: object
+          properties:
+            include_transcripts:
+              type: boolean
+              default: false
+            include_edges:
+              type: boolean
+              default: false
+            top_k:
+              type: integer
+              default: 10
+              maximum: 100
+
+    DeepSearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        video_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        context:
+          type: object
+          properties:
+            include_synthesis:
+              type: boolean
+              default: true
+            include_cross_references:
+              type: boolean
+              default: true
+            max_topics_to_analyze:
+              type: integer
+              default: 20
+
+    CreateExportRequest:
+      type: object
+      required: [video_id, type]
+      properties:
+        video_id:
+          type: string
+          format: uuid
+        graph_version_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [pptx, html, pdf]
+        options:
+          type: object
+          properties:
+            include_snippets:
+              type: boolean
+              default: true
+            snippet_embed_mode:
+              type: string
+              enum: [embedded, linked, none]
+              default: linked
+            template:
+              type: string
+              enum: [default, minimal, detailed]
+              default: default
+            topic_levels:
+              type: array
+              items:
+                type: integer
+            include_appendix:
+              type: boolean
+              default: true
+
+    CreateShareRequest:
+      type: object
+      required: [resource_type, resource_id]
+      properties:
+        resource_type:
+          type: string
+          enum: [video, graph, topic]
+        resource_id:
+          type: string
+          format: uuid
+        scope:
+          type: string
+          enum: [view, comment, edit]
+          default: view
+        expires_at:
+          type: string
+          format: date-time
+        password:
+          type: string
+          minLength: 4
+          maxLength: 100
+
+    # Response Schemas
+    VideoResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        source_url:
+          type: string
+          format: uri
+        source_type:
+          type: string
+        status:
+          $ref: '#/components/schemas/VideoStatus'
+        duration_s:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        job_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: ID of the processing job
+
+    VideoDetailResponse:
+      allOf:
+        - $ref: '#/components/schemas/VideoResponse'
+        - type: object
+          properties:
+            metadata:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                thumbnail_url:
+                  type: string
+                  format: uri
+            graph:
+              $ref: '#/components/schemas/GraphSummary'
+            transcript_segments_count:
+              type: integer
+            topics_count:
+              type: integer
+            versions_count:
+              type: integer
+
+    VideoListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VideoResponse'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    GraphResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        video_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        parent_version_id:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+          enum: [processing, complete, error]
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopicNode'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopicEdge'
+        metrics:
+          $ref: '#/components/schemas/GraphMetrics'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    GraphSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        status:
+          type: string
+        nodes_count:
+          type: integer
+        edges_count:
+          type: integer
+
+    GraphVersionListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              version:
+                type: integer
+              parent_version_id:
+                type: string
+                format: uuid
+                nullable: true
+              status:
+                type: string
+              nodes_count:
+                type: integer
+              created_by:
+                type: string
+              created_at:
+                type: string
+                format: date-time
+              notes:
+                type: string
+                nullable: true
+
+    TopicResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        video_id:
+          type: string
+          format: uuid
+        level:
+          type: integer
+        start_ts:
+          type: number
+        end_ts:
+          type: number
+        title:
+          type: string
+        summary:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: string
+        parent_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        child_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        importance_score:
+          type: number
+        cluster_id:
+          type: string
+          nullable: true
+        snippets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Snippet'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    SnippetListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Snippet'
+
+    SearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+        total:
+          type: integer
+        took_ms:
+          type: integer
+
+    SearchResult:
+      type: object
+      properties:
+        topic:
+          $ref: '#/components/schemas/TopicNode'
+        score:
+          type: number
+        matched_transcript:
+          type: string
+          nullable: true
+        highlight:
+          type: string
+          nullable: true
+
+    DeepSearchResponse:
+      type: object
+      properties:
+        query:
+          type: string
+        answer:
+          type: string
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchResult'
+        synthesis:
+          type: string
+          nullable: true
+        cross_references:
+          type: array
+          items:
+            type: object
+            properties:
+              topic_a_id:
+                type: string
+              topic_b_id:
+                type: string
+              relationship:
+                type: string
+        took_ms:
+          type: integer
+
+    ExportResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        video_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [pptx, html, pdf]
+        status:
+          type: string
+          enum: [pending, processing, complete, error]
+        storage_path:
+          type: string
+          nullable: true
+        download_url:
+          type: string
+          format: uri
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    QuotaResponse:
+      type: object
+      properties:
+        policy:
+          $ref: '#/components/schemas/QuotaPolicy'
+        usage:
+          type: object
+          properties:
+            videos_this_month:
+              type: integer
+            storage_gb:
+              type: number
+            public_links:
+              type: integer
+            versions_total:
+              type: integer
+        reset_date:
+          type: string
+          format: date
+
+    ShareResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        url:
+          type: string
+          format: uri
+        resource_type:
+          type: string
+        resource_id:
+          type: string
+          format: uuid
+        scope:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    SharedResourceResponse:
+      type: object
+      properties:
+        resource_type:
+          type: string
+        resource:
+          oneOf:
+            - $ref: '#/components/schemas/VideoDetailResponse'
+            - $ref: '#/components/schemas/GraphResponse'
+            - $ref: '#/components/schemas/TopicResponse'
+        scope:
+          type: string
+
+    JobStatusResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [video_analysis, export, snippet_generation]
+        status:
+          type: string
+          enum: [pending, running, paused, completed, failed, cancelled]
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+        current_step:
+          type: string
+          nullable: true
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+              started_at:
+                type: string
+                format: date-time
+                nullable: true
+              completed_at:
+                type: string
+                format: date-time
+                nullable: true
+              error:
+                type: string
+                nullable: true
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+          nullable: true
+        manifest:
+          $ref: '#/components/schemas/ArtifactManifest'
+          nullable: true
+
+    TranscriptResponse:
+      type: object
+      properties:
+        video_id:
+          type: string
+          format: uuid
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TranscriptSegment'
+        total:
+          type: integer
+
+    # Entity Schemas
+    VideoStatus:
+      type: string
+      enum:
+        - pending
+        - downloading
+        - processing
+        - analyzing
+        - generating_graph
+        - completed
+        - failed
+        - cancelled
+
+    VideoStatusResponse:
+      type: object
+      properties:
+        video_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/VideoStatus'
+        progress:
+          type: number
+          minimum: 0
+          maximum: 100
+        current_stage:
+          type: string
+        stages:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+              progress:
+                type: number
+        error:
+          type: string
+          nullable: true
+        estimated_completion:
+          type: string
+          format: date-time
+          nullable: true
+
+    TopicNode:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        level:
+          type: integer
+        start_ts:
+          type: number
+          description: Start timestamp in seconds
+        end_ts:
+          type: number
+          description: End timestamp in seconds
+        title:
+          type: string
+        summary:
+          type: string
+        keywords:
+          type: array
+          items:
+            type: string
+        parent_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        child_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        importance_score:
+          type: number
+          minimum: 0
+          maximum: 1
+        cluster_id:
+          type: string
+          nullable: true
+
+    TopicEdge:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        src_topic_id:
+          type: string
+          format: uuid
+        dst_topic_id:
+          type: string
+          format: uuid
+        edge_type:
+          type: string
+          enum: [semantic, hierarchy, sequence, reference]
+        distance:
+          type: number
+          description: Semantic distance (lower = more similar)
+        weight:
+          type: number
+          description: Edge weight for graph algorithms
+        metadata:
+          type: object
+          additionalProperties: true
+
+    GraphMetrics:
+      type: object
+      properties:
+        node_count:
+          type: integer
+        edge_count:
+          type: integer
+        density:
+          type: number
+        avg_clustering:
+          type: number
+        connected_components:
+          type: integer
+        levels:
+          type: array
+          items:
+            type: object
+            properties:
+              level:
+                type: integer
+              node_count:
+                type: integer
+
+    Snippet:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        topic_id:
+          type: string
+          format: uuid
+        start_ts:
+          type: number
+        end_ts:
+          type: number
+        duration_s:
+          type: number
+        video_url:
+          type: string
+          format: uri
+        thumbnail_url:
+          type: string
+          format: uri
+          nullable: true
+        caption_url:
+          type: string
+          format: uri
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    TranscriptSegment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        start_ts:
+          type: number
+        end_ts:
+          type: number
+        speaker_id:
+          type: string
+          nullable: true
+        text:
+          type: string
+        words:
+          type: array
+          items:
+            $ref: '#/components/schemas/WordAlignment'
+          nullable: true
+
+    WordAlignment:
+      type: object
+      properties:
+        word:
+          type: string
+        start_ts:
+          type: number
+        end_ts:
+          type: number
+        confidence:
+          type: number
+          nullable: true
+
+    QuotaPolicy:
+      type: object
+      properties:
+        max_videos_per_month:
+          type: integer
+        max_storage_gb:
+          type: number
+        max_public_links:
+          type: integer
+        max_versions_per_video:
+          type: integer
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        total_pages:
+          type: integer
+
+    ArtifactManifest:
+      type: object
+      description: Pipeline artifact manifest passed between steps
+      properties:
+        video_id:
+          type: string
+          format: uuid
+        graph_version_id:
+          type: string
+          format: uuid
+        job_id:
+          type: string
+          format: uuid
+        paths:
+          type: object
+          properties:
+            video_original:
+              type: string
+            video_normalized:
+              type: string
+            audio_wav:
+              type: string
+            transcript:
+              type: string
+            topics:
+              type: string
+            embeddings:
+              type: string
+            graph:
+              type: string
+            snippets:
+              type: array
+              items:
+                type: string
+            exports:
+              type: array
+              items:
+                type: string
+        metrics:
+          type: object
+          properties:
+            duration_s:
+              type: number
+            transcript_segments:
+              type: integer
+            topic_count:
+              type: integer
+            edge_count:
+              type: integer
+            processing_time_ms:
+              type: number
+        config_snapshot:
+          $ref: '#/components/schemas/PipelineConfig'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+          nullable: true
+        request_id:
+          type: string
